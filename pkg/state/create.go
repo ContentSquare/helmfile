@@ -377,7 +377,7 @@ func (st *HelmState) loadValuesEntries(missingFileHandler *string, entries []int
 	var envVals map[string]interface{}
 
 	valuesEntries := append([]interface{}{}, entries...)
-	ld := NewEnvironmentValuesLoader(st.storage(), st.fs, st.logger, remote)
+	ld := NewEnvironmentValuesLoader(st.storage(), st.fs, st.logger, remote, st.Environments[envName].LayeredValues)
 	var err error
 	envVals, err = ld.LoadEnvironmentValues(missingFileHandler, valuesEntries, ctxEnv, envName)
 	if err != nil {

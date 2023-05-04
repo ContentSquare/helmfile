@@ -23,14 +23,17 @@ type EnvironmentValuesLoader struct {
 	logger *zap.SugaredLogger
 
 	remote *remote.Remote
+
+	layeredValues bool
 }
 
-func NewEnvironmentValuesLoader(storage *Storage, fs *filesystem.FileSystem, logger *zap.SugaredLogger, remote *remote.Remote) *EnvironmentValuesLoader {
+func NewEnvironmentValuesLoader(storage *Storage, fs *filesystem.FileSystem, logger *zap.SugaredLogger, remote *remote.Remote, layeredValues bool) *EnvironmentValuesLoader {
 	return &EnvironmentValuesLoader{
-		storage: storage,
-		fs:      fs,
-		logger:  logger,
-		remote:  remote,
+		storage:       storage,
+		fs:            fs,
+		logger:        logger,
+		remote:        remote,
+		layeredValues: layeredValues,
 	}
 }
 
@@ -58,7 +61,11 @@ func (ld *EnvironmentValuesLoader) LoadEnvironmentValues(missingFileHandler *str
 					env = *ctxEnv
 				}
 
-				tmplData := NewEnvironmentTemplateData(env, "", map[string]interface{}{})
+				baseData := map[string]interface{}{}
+				if ld.layeredValues {
+					baseData = result
+				}
+				tmplData := NewEnvironmentTemplateData(env, "", baseData)
 				r := tmpl.NewFileRenderer(ld.fs, filepath.Dir(f), tmplData)
 				bytes, err := r.RenderToBytes(f)
 				if err != nil {
