@@ -2,9 +2,9 @@ package state
 
 type EnvironmentSpec struct {
 	Values        []interface{} `yaml:"values,omitempty"`
+	LayeredValues []interface{} `yaml:"layeredValues,omitempty"`
 	Secrets       []string      `yaml:"secrets,omitempty"`
 	KubeContext   string        `yaml:"kubeContext,omitempty"`
-	LayeredValues bool          `yaml:"layeredValues,omitempty"`
 
 	// MissingFileHandler instructs helmfile to fail when unable to find a environment values file listed
 	// under `environments.NAME.values`.

@@ -12,7 +12,7 @@ import (
 	"github.com/helmfile/helmfile/pkg/remote"
 )
 
-func newLoader(layeredValues bool) *EnvironmentValuesLoader {
+func newLoader() *EnvironmentValuesLoader {
 	log := helmexec.NewLogger(io.Discard, "debug")
 
 	storage := &Storage{
@@ -22,15 +22,15 @@ func newLoader(layeredValues bool) *EnvironmentValuesLoader {
 		logger:   log,
 	}
 
-	return NewEnvironmentValuesLoader(storage, storage.fs, log, remote.NewRemote(log, "/tmp", storage.fs), layeredValues)
+	return NewEnvironmentValuesLoader(storage, storage.fs, log, remote.NewRemote(log, "/tmp", storage.fs))
 }
 
 // See https://github.com/roboll/helmfile/pull/1169
 func TestEnvValsLoad_SingleValuesFile(t *testing.T) {
-	l := newLoader(false)
+	l := newLoader()
 
-	actual, err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.5.yaml"}, nil, "")
-	if err != nil {
+	actual := make(map[string]interface{})
+	if err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.5.yaml"}, nil, "", actual, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,7 +44,7 @@ func TestEnvValsLoad_SingleValuesFile(t *testing.T) {
 }
 
 func TestEnvValsLoad_EnvironmentNameFile(t *testing.T) {
-	l := newLoader(false)
+	l := newLoader()
 
 	expected := map[string]interface{}{
 		"envName": "test",
@@ -87,8 +87,8 @@ func TestEnvValsLoad_EnvironmentNameFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actual, err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.6.yaml.gotmpl"}, tt.env, tt.envName)
-			if err != nil {
+			actual := make(map[string]interface{})
+			if err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.6.yaml.gotmpl"}, tt.env, tt.envName, actual, false); err != nil {
 				t.Fatal(err)
 			}
 
@@ -101,10 +101,10 @@ func TestEnvValsLoad_EnvironmentNameFile(t *testing.T) {
 
 // Fetch Environment values from remote
 func TestEnvValsLoad_SingleValuesFileRemote(t *testing.T) {
-	l := newLoader(false)
+	l := newLoader()
 
-	actual, err := l.LoadEnvironmentValues(nil, []interface{}{"git::https://github.com/helm/helm.git@cmd/helm/testdata/output/values.yaml?ref=v3.8.1"}, nil, "")
-	if err != nil {
+	actual := make(map[string]interface{})
+	if err := l.LoadEnvironmentValues(nil, []interface{}{"git::https://github.com/helm/helm.git@cmd/helm/testdata/output/values.yaml?ref=v3.8.1"}, nil, "", actual, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,10 +119,10 @@ func TestEnvValsLoad_SingleValuesFileRemote(t *testing.T) {
 
 // See https://github.com/roboll/helmfile/issues/1150
 func TestEnvValsLoad_OverwriteNilValue_Issue1150(t *testing.T) {
-	l := newLoader(false)
+	l := newLoader()
 
-	actual, err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.1.yaml", "testdata/values.2.yaml"}, nil, "")
-	if err != nil {
+	actual := make(map[string]interface{})
+	if err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.1.yaml", "testdata/values.2.yaml"}, nil, "", actual, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,10 +141,10 @@ func TestEnvValsLoad_OverwriteNilValue_Issue1150(t *testing.T) {
 
 // See https://github.com/roboll/helmfile/issues/1154
 func TestEnvValsLoad_OverwriteWithNilValue_Issue1154(t *testing.T) {
-	l := newLoader(false)
+	l := newLoader()
 
-	actual, err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.3.yaml", "testdata/values.4.yaml"}, nil, "")
-	if err != nil {
+	actual := make(map[string]interface{})
+	if err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/values.3.yaml", "testdata/values.4.yaml"}, nil, "", actual, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -164,10 +164,10 @@ func TestEnvValsLoad_OverwriteWithNilValue_Issue1154(t *testing.T) {
 
 // See https://github.com/roboll/helmfile/issues/1168
 func TestEnvValsLoad_OverwriteEmptyValue_Issue1168(t *testing.T) {
-	l := newLoader(false)
+	l := newLoader()
 
-	actual, err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/issues/1168/addons.yaml", "testdata/issues/1168/addons2.yaml"}, nil, "")
-	if err != nil {
+	actual := make(map[string]interface{})
+	if err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/issues/1168/addons.yaml", "testdata/issues/1168/addons2.yaml"}, nil, "", actual, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -189,14 +189,48 @@ func TestEnvValsLoad_OverwriteEmptyValue_Issue1168(t *testing.T) {
 }
 
 func TestEnvValsLoad_LayeredValues(t *testing.T) {
-	l := newLoader(true)
+	l := newLoader()
 
-	actual, err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/layered1.yaml", "testdata/layered2.yaml.gotmpl"}, nil, "")
-	if err != nil {
+	actual := make(map[string]interface{})
+	if err := l.LoadEnvironmentValues(nil, []interface{}{"testdata/layered.1.yaml", "testdata/layered.2.yaml.gotmpl"}, nil, "", actual, true); err != nil {
 		t.Fatal(err)
 	}
 
 	expected := map[string]interface{}{
+		"greeting":       string("hello"),
+		"somevalue":      string("foo"),
+		"someothervalue": string("new foo"),
+	}
+
+	if diff := cmp.Diff(expected, actual); diff != "" {
+		t.Errorf(diff)
+	}
+}
+
+func TestEnvValsLoad_LayeredAndUnlayeredValues(t *testing.T) {
+	l := newLoader()
+
+	unlayeredValues := []interface{}{
+		"testdata/layered.1.yaml",
+	}
+
+	layeredValues := []interface{}{
+		"testdata/layered.2.yaml.gotmpl",
+		"testdata/layered.3.yaml.gotmpl",
+	}
+
+	actual := make(map[string]interface{})
+
+	if err := l.LoadEnvironmentValues(nil, unlayeredValues, nil, "", actual, false); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := l.LoadEnvironmentValues(nil, layeredValues, nil, "", actual, true); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := map[string]interface{}{
+		"greeting":       string("hello new foo"),
 		"somevalue":      string("foo"),
 		"someothervalue": string("new foo"),
 	}
