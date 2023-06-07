@@ -146,7 +146,7 @@ func (c *StateCreator) LoadEnvValues(target *HelmState, env string, ctxEnv, over
 		return nil, &StateLoadError{fmt.Sprintf("failed to read %s", state.FilePath), err}
 	}
 
-	newDefaults, err := state.loadValuesEntries(nil, state.DefaultValues, c.remote, ctxEnv, env)
+	newDefaults, err := state.loadValuesEntries(nil, state.DefaultValues, nil, c.remote, ctxEnv, env)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (c *StateCreator) loadEnvValues(st *HelmState, name string, failOnMissingEn
 	envSpec, ok := st.Environments[name]
 	if ok {
 		var err error
-		envVals, err = st.loadValuesEntries(envSpec.MissingFileHandler, envSpec.Values, c.remote, ctxEnv, name)
+		envVals, err = st.loadValuesEntries(envSpec.MissingFileHandler, envSpec.Values, envSpec.LayeredValues, c.remote, ctxEnv, name)
 		if err != nil {
 			return nil, err
 		}
@@ -373,15 +373,23 @@ func (c *StateCreator) scatterGatherEnvSecretFiles(st *HelmState, envSecretFiles
 	return nil
 }
 
-func (st *HelmState) loadValuesEntries(missingFileHandler *string, entries []interface{}, remote *remote.Remote, ctxEnv *environment.Environment, envName string) (map[string]interface{}, error) {
-	var envVals map[string]interface{}
+func (st *HelmState) loadValuesEntries(missingFileHandler *string, entries []interface{}, layeredEntries []interface{}, remote *remote.Remote, ctxEnv *environment.Environment, envName string) (map[string]interface{}, error) {
+	envVals := make(map[string]interface{}, len(entries)+len(layeredEntries))
 
-	valuesEntries := append([]interface{}{}, entries...)
 	ld := NewEnvironmentValuesLoader(st.storage(), st.fs, st.logger, remote)
-	var err error
-	envVals, err = ld.LoadEnvironmentValues(missingFileHandler, valuesEntries, ctxEnv, envName)
-	if err != nil {
-		return nil, err
+
+	if entries != nil {
+		valuesEntries := append([]interface{}{}, entries...)
+		if err := ld.LoadEnvironmentValues(missingFileHandler, valuesEntries, ctxEnv, envName, envVals, false); err != nil {
+			return nil, err
+		}
+	}
+
+	if layeredEntries != nil {
+		layeredValuesEntries := append([]interface{}{}, entries...)
+		if err := ld.LoadEnvironmentValues(missingFileHandler, layeredValuesEntries, ctxEnv, envName, envVals, true); err != nil {
+			return nil, err
+		}
 	}
 
 	return envVals, nil
