@@ -1,2 +1,5 @@
 # Helmfile Maintainers
 * @mumoshu @itscaro @yxxhero @xiaomudk
+
+# Protect .github/agents folder for GitHub Copilot agents
+/.github/agents/ @mumoshu
